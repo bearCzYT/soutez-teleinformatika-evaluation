@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Moje hodnocení - Hodnocení grafických prací</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <div class="navbar">
+        <h1>Moje hodnocení</h1>
+        <div class="nav-links">
+            <span>Přihlášen: {{ session.user_name }}</span>
+            <a href="{{ url_for('results') }}" class="btn btn-secondary">Výsledky</a>
+            <a href="{{ url_for('logout') }}" class="btn btn-danger">Odhlásit</a>
+        </div>
+    </div>
+
+    <div class="container">
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                    <div class="alert alert-{{ category }}">{{ message }}</div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+
+        {% if my_evaluations %}
+            {% for item in my_evaluations %}
+            <div class="section">
+                <div class="creation-info">
+                    <h3>{{ item.creation.original_name }}</h3>
+                    <span class="badge badge-{{ 'blue' if item.creation.category == 'Photoshop' else ('orange' if item.creation.category == 'Illustrator' else 'purple') }}">
+                        {{ item.creation.category }}
+                    </span>
+                </div>
+                <div class="table-container">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Kritérium</th>
+                                <th>Vaše body</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for criterion_name, score in item.evaluation.scores.items() %}
+                            <tr>
+                                <td>{{ criterion_name }}</td>
+                                <td><strong>{{ score }}</strong></td>
+                            </tr>
+                            {% endfor %}
+                            <tr>
+                                <td><strong>Celkem</strong></td>
+                                <td><strong>{{ item.evaluation.total }}</strong></td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <form method="POST" action="{{ url_for('report_evaluation_issue') }}" class="report-form">
+                    <input type="hidden" name="creation_id" value="{{ item.creation.id }}">
+                    <div class="form-group">
+                        <label for="note_{{ item.creation.id }}">Poznámka k nepřesnosti (volitelné):</label>
+                        <input type="text" id="note_{{ item.creation.id }}" name="note" placeholder="Popište problém, který vidíte.">
+                    </div>
+                    <button type="submit" class="btn btn-warning">Nahlásit chybu</button>
+                </form>
+            </div>
+            {% endfor %}
+        {% else %}
+            <div class="section">
+                <div class="info-box">
+                    <p>Zatím nemáte žádná uložená hodnocení.</p>
+                </div>
+            </div>
+        {% endif %}
+    </div>
+
+    <script src="{{ url_for('static', filename='script.js') }}"></script>
+</body>
+</html>

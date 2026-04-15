@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hodnocení - Hodnocení grafických prací</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <div class="navbar">
+        <h1>Hodnocení prací</h1>
+        <div class="nav-links">
+            <span>Přihlášen: {{ session.user_name }}</span>
+            <a href="{{ url_for('logout') }}" class="btn btn-danger">Odhlásit</a>
+        </div>
+    </div>
+    
+    <div class="container">
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                    <div class="alert alert-{{ category }}">{{ message }}</div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+        
+        <!-- Progress bar -->
+        <div class="progress-info">
+            <h3>Postup hodnocení</h3>
+            <div class="progress-bar">
+                <div class="progress-fill" style="width: {{ (progress.current / progress.total * 100) if progress.total > 0 else 0 }}%"></div>
+            </div>
+            <p>Hodnotíte práci {{ progress.current }} z {{ progress.total }}</p>
+        </div>
+        
+        <!-- Evaluation layout: Left side - image, Right side - form -->
+        <div class="evaluation-layout">
+            <!-- Left side: Image and download -->
+            <div class="evaluation-left">
+                <div class="creation-display">
+                    <img src="{{ url_for('uploaded_file', filename=creation.preview_filename) }}" 
+                         alt="{{ creation.original_name }}"
+                         onclick="viewImage('{{ url_for('uploaded_file', filename=creation.preview_filename) }}')">
+                </div>
+                <div class="creation-display">
+                    <img src="{{ url_for('uploaded_file', filename=creation.source_filename) }}" 
+                         alt="Druhý obrázek - {{ creation.original_name }}"
+                         onclick="viewImage('{{ url_for('uploaded_file', filename=creation.source_filename) }}')">
+                </div>
+                <div class="creation-info">
+                    <h3>{{ creation.original_name }}</h3>
+                    <span class="badge badge-{{ 'blue' if creation.category == 'Photoshop' else ('orange' if creation.category == 'Illustrator' else 'purple') }}">
+                        {{ creation.category }}
+                    </span>
+                </div>
+            </div>
+            
+            <!-- Right side: Evaluation form -->
+            <div class="evaluation-right">
+                <h2>Hodnocení</h2>
+                <form method="POST" action="{{ url_for('submit_evaluation') }}">
+                    <input type="hidden" name="creation_id" value="{{ creation.id }}">
+                    
+                    {% for criterion in criteria %}
+                    <div class="form-group">
+                        <label for="criterion_{{ criterion.id }}">{{ criterion.name }}:</label>
+                        
+                        {% if criterion.type == 'slider' %}
+                        <div class="slider-container">
+                            <input type="range" 
+                                   id="criterion_{{ criterion.id }}" 
+                                   name="criterion_{{ criterion.id }}" 
+                                   min="{{ criterion.min }}" 
+                                   max="{{ criterion.max }}" 
+                                   value="{{ (criterion.min + criterion.max) // 2 }}" 
+                                   oninput="updateSliderValue({{ criterion.id }}, {{ criterion.min }}, {{ criterion.max }})">
+                            <span id="value_{{ criterion.id }}" class="range-value">{{ (criterion.min + criterion.max) // 2 }}</span>
+                        </div>
+                        <div class="slider-labels">
+                            <span>{{ criterion.min }}</span>
+                            <span>{{ criterion.max }}</span>
+                        </div>
+                        {% else %}
+                        <div class="checkbox-container">
+                            <label class="checkbox-label">
+                                <input type="checkbox" 
+                                       id="criterion_{{ criterion.id }}" 
+                                       name="criterion_{{ criterion.id }}">
+                                <span class="checkbox-text">Splněno</span>
+                            </label>
+                        </div>
+                        {% endif %}
+                    </div>
+                    {% endfor %}
+                    
+                    <div class="form-actions">
+                        <button type="submit" class="btn btn-primary btn-large">Odeslat hodnocení →</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Modal pro zobrazení obrázku -->
+    <div id="imageModal" class="modal">
+        <span class="close" onclick="closeImageModal()">&times;</span>
+        <img class="modal-image" id="modalImage">
+    </div>
+    
+    <script src="{{ url_for('static', filename='script.js') }}"></script>
+</body>
+</html>

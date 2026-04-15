@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Čekání - Hodnocení grafických prací</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <meta http-equiv="refresh" content="30">
+</head>
+<body>
+    <div class="navbar">
+        <h1>Hodnocení prací</h1>
+        <div class="nav-links">
+            <span>Přihlášen: {{ session.user_name }}</span>
+            <a href="{{ url_for('results') }}" class="btn btn-secondary">Výsledky</a>
+            <a href="{{ url_for('logout') }}" class="btn btn-danger">Odhlásit</a>
+        </div>
+    </div>
+    
+    <div class="container">
+        <div class="waiting-screen">
+            {% if state == 'všechny_ohodnoceno' %}
+                <div class="waiting-icon">✅</div>
+                <h1>Dokončili jste hodnocení!</h1>
+                <p class="waiting-state">Všechny práce byly ohodnoceny</p>
+                <p>Vynikající práce! Ohodnotili jste všechny práce, které vám byly přiděleny.</p>
+                <p>Nyní počkejte na uzavření hodnocení administrátorem. Po uzavření se zobrazí výsledky.</p>
+            {% else %}
+                <div class="waiting-icon">⏳</div>
+                <h1>Soutěž momentálně neběží</h1>
+                <p class="waiting-state">Aktuální stav: <strong>{{ state }}</strong></p>
+                
+                {% if state == 'čekání' %}
+                    <p>Hodnocení ještě nebylo spuštěno. Počkejte na zahájení soutěže.</p>
+                {% elif state == 'pozastaveno' %}
+                    <p>Hodnocení bylo dočasně pozastaveno. Brzy bude obnoveno.</p>
+                {% elif state == 'ukončeno' %}
+                    <p>Soutěž byla ukončena. Děkujeme za vaši účast!</p>
+                    <a href="{{ url_for('results') }}" class="btn btn-primary">Zobrazit výsledky</a>
+                {% endif %}
+            {% endif %}
+            
+            <p class="refresh-info">Stránka se automaticky obnovuje každých 30 sekund.</p>
+        </div>
+    </div>
+</body>
+</html>

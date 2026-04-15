@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Všechna hodnocení - Admin</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <div class="navbar">
+        <h1>Všechna hodnocení</h1>
+        <div class="nav-links">
+            <span>Přihlášen: {{ session.user_name }}</span>
+            <a href="{{ url_for('admin') }}" class="btn btn-secondary">Admin</a>
+            <a href="{{ url_for('results') }}" class="btn btn-secondary">Výsledky</a>
+            <a href="{{ url_for('logout') }}" class="btn btn-danger">Odhlásit</a>
+        </div>
+    </div>
+
+    <div class="container">
+        <div class="section">
+            <h2>Hodnocení všech hodnotících</h2>
+            <div class="table-container">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Datum</th>
+                            <th>Hodnotící</th>
+                            <th>Práce</th>
+                            <th>Kategorie</th>
+                            <th>Body podle kritérií</th>
+                            <th>Celkem</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for item in all_evaluations %}
+                        <tr>
+                            <td>{{ item.evaluation.evaluated_at[:16].replace('T', ' ') }}</td>
+                            <td>{{ item.evaluation.evaluator_name }}</td>
+                            <td>{{ item.creation.original_name }}</td>
+                            <td>
+                                <span class="badge badge-{{ 'blue' if item.creation.category == 'Photoshop' else ('orange' if item.creation.category == 'Illustrator' else 'purple') }}">
+                                    {{ item.creation.category }}
+                                </span>
+                            </td>
+                            <td>
+                                {% for criterion_name, score in item.evaluation.scores.items() %}
+                                    <div class="score-item">
+                                        <span class="score-label">{{ criterion_name }}:</span>
+                                        <span class="score-value">{{ score }}</span>
+                                    </div>
+                                {% endfor %}
+                            </td>
+                            <td><strong>{{ item.evaluation.total }}</strong></td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <script src="{{ url_for('static', filename='script.js') }}"></script>
+</body>
+</html>

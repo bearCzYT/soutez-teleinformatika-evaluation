@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Raw Database - Admin</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <style>
+        .db-container {
+            max-width: 100%;
+            overflow-x: auto;
+        }
+        .table-section {
+            margin-bottom: 40px;
+            background: var(--card-bg);
+            border: 1px solid var(--card-border);
+            border-radius: var(--radius);
+            padding: 20px;
+        }
+        .table-section h3 {
+            color: var(--neon);
+            margin-bottom: 16px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        .table-section h3 .badge {
+            font-size: 11px;
+            padding: 4px 10px;
+        }
+        .sql-editor {
+            background: var(--card-bg);
+            border: 1px solid var(--card-border);
+            border-radius: var(--radius);
+            padding: 20px;
+            margin-bottom: 30px;
+        }
+        .sql-editor textarea {
+            width: 100%;
+            min-height: 120px;
+            background: rgba(0,0,0,0.3);
+            border: 1px solid var(--card-border);
+            border-radius: 8px;
+            color: var(--text);
+            padding: 12px;
+            font-family: 'Courier New', monospace;
+            font-size: 14px;
+            resize: vertical;
+        }
+        .json-cell {
+            max-width: 300px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            cursor: help;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+        }
+        .json-cell:hover {
+            overflow: visible;
+            white-space: normal;
+            word-break: break-all;
+        }
+        .row-actions {
+            display: flex;
+            gap: 6px;
+        }
+        .collapsible-table {
+            margin-top: 12px;
+        }
+        .toggle-table-btn {
+            background: rgba(0,234,255,0.15);
+            border: 1px solid rgba(0,234,255,0.3);
+            color: var(--neon);
+            padding: 6px 14px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 12px;
+            transition: all 0.2s;
+        }
+        .toggle-table-btn:hover {
+            background: rgba(0,234,255,0.25);
+        }
+        .table-hidden {
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="navbar">
+        <h1>Raw Database Manager</h1>
+        <div class="nav-links">
+            <span>Přihlášen: {{ session.user_name }}</span>
+            <a href="{{ url_for('admin') }}" class="btn btn-secondary">Admin</a>
+            <a href="{{ url_for('logout') }}" class="btn btn-danger">Odhlásit</a>
+        </div>
+    </div>
+    
+    <div class="container db-container">
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                    <div class="alert alert-{{ category }}">{{ message }}</div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+
+        <!-- SQL Editor -->
+        <div class="sql-editor">
+            <h2>SQL Dotaz Editor</h2>
+            <p style="color: var(--muted); font-size: 14px; margin-bottom: 12px;">
+                Povoleny: SELECT, UPDATE, INSERT, DELETE. Příklad: <code>SELECT * FROM users WHERE role='admin'</code>
+            </p>
+            <form method="POST" action="{{ url_for('admin_database_execute') }}">
+                <textarea name="query" placeholder="Zadejte SQL dotaz..."></textarea>
+                <button type="submit" class="btn btn-primary" style="margin-top: 10px;">Provést dotaz</button>
+            </form>
+        </div>
+
+        <!-- Database Tables -->
+        <div class="section">
+            <h2>Databázové tabulky</h2>
+            
+            {% for table_name, table_info in tables.items() %}
+            <div class="table-section">
+                <h3>
+                    {{ table_name }}
+                    <span class="badge badge-blue">{{ table_info.data|length }} řádků</span>
+                    <button class="toggle-table-btn" onclick="toggleTable('{{ table_name }}')">
+                        Zobrazit/Skrýt
+                    </button>
+                </h3>
+                
+                <div id="table-{{ table_name }}" class="collapsible-table">
+                    {% if table_info.data %}
+                    <div class="table-container">
+                        <table>
+                            <thead>
+                                <tr>
+                                    {% for column in table_info.columns %}
+                                    <th>{{ column }}</th>
+                                    {% endfor %}
+                                    <th>Akce</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for row in table_info.data %}
+                                <tr>
+                                    {% for column in table_info.columns %}
+                                    <td>
+                                        {% set value = row[column] %}
+                                        {% if value is none %}
+                                            <em style="color: var(--muted);">NULL</em>
+                                        {% elif value is string and (value.startswith('{') or value.startswith('[')) %}
+                                            <span class="json-cell" title="{{ value }}">{{ value }}</span>
+                                        {% else %}
+                                            {{ value }}
+                                        {% endif %}
+                                    </td>
+                                    {% endfor %}
+                                    <td class="row-actions">
+                                        {% if 'id' in row %}
+                                        <form method="POST" action="{{ url_for('admin_database_delete_row', table_name=table_name, row_id=row['id']) }}" 
+                                              onsubmit="return confirm('Smazat záznam ID {{ row['id'] }}?');" style="display: inline;">
+                                            <button type="submit" class="btn btn-danger btn-sm">Smazat</button>
+                                        </form>
+                                        {% else %}
+                                        <span style="color: var(--muted); font-size: 12px;">N/A</span>
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    {% else %}
+                    <p style="color: var(--muted); margin-top: 10px;">Tabulka je prázdná.</p>
+                    {% endif %}
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+
+        <!-- Raw JSON Export -->
+        <div class="section">
+            <h2>Export jako JSON</h2>
+            <p style="color: var(--muted); margin-bottom: 14px;">
+                Kompletní export všech dat pro zálohu nebo migraci:
+            </p>
+            <button onclick="exportAsJSON()" class="btn btn-success">Stáhnout JSON</button>
+        </div>
+    </div>
+
+    <script>
+        function toggleTable(tableName) {
+            const tableDiv = document.getElementById('table-' + tableName);
+            if (tableDiv.classList.contains('table-hidden')) {
+                tableDiv.classList.remove('table-hidden');
+            } else {
+                tableDiv.classList.add('table-hidden');
+            }
+        }
+
+        function exportAsJSON() {
+            const data = {{ tables|tojson|safe }};
+            const dataStr = JSON.stringify(data, null, 2);
+            const blob = new Blob([dataStr], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'database_export_' + new Date().toISOString().slice(0,10) + '.json';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        }
+
+        // Zavřít všechny tabulky při načtení
+        document.addEventListener('DOMContentLoaded', function() {
+            document.querySelectorAll('.collapsible-table').forEach(function(el) {
+                el.classList.add('table-hidden');
+            });
+        });
+    </script>
+    <script src="{{ url_for('static', filename='script.js') }}"></script>
+</body>
+</html>

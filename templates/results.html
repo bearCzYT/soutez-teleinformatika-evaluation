@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Výsledky - Hodnocení grafických prací</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <div class="navbar">
+        <h1>Výsledky hodnocení podle kategorií</h1>
+        <div class="nav-links">
+            <span>Přihlášen: {{ session.user_name }}</span>
+            {% if session.user_role == 'admin' %}
+                <a href="{{ url_for('admin') }}" class="btn btn-secondary">Admin</a>
+            {% else %}
+                <a href="{{ url_for('evaluate') }}" class="btn btn-secondary">Hodnocení</a>
+                <a href="{{ url_for('my_evaluations') }}" class="btn btn-secondary">Moje hodnocení</a>
+            {% endif %}
+            <a href="{{ url_for('logout') }}" class="btn btn-danger">Odhlásit</a>
+        </div>
+    </div>
+    
+    <div class="container">
+        {% if categories %}
+            {% for category_name, results in categories.items() %}
+            <div class="section category-section">
+                <h2 class="category-header">
+                    <span class="badge badge-{{ 'blue' if category_name == 'Photoshop' else ('orange' if category_name == 'Illustrator' else 'purple') }} badge-large">
+                        {{ category_name }}
+                    </span>
+                </h2>
+                
+                {% if results %}
+                    <!-- Top 3 podium -->
+                    <div class="podium">
+                        {% if results|length >= 2 %}
+                        <div class="podium-place second">
+                            <div class="podium-rank">🥈</div>
+                            <img src="{{ url_for('uploaded_file', filename=results[1].creation.preview_filename) }}" 
+                                 alt="{{ results[1].creation.original_name }}"
+                                 onclick="viewImage('{{ url_for('uploaded_file', filename=results[1].creation.preview_filename) }}')">
+                            <h4>{{ results[1].creation.original_name }}</h4>
+                            <p class="score">{{ results[1].avg_total }} bodů</p>
+                        </div>
+                        {% endif %}
+                        
+                        {% if results|length >= 1 %}
+                        <div class="podium-place first">
+                            <div class="podium-rank">🥇</div>
+                            <img src="{{ url_for('uploaded_file', filename=results[0].creation.preview_filename) }}" 
+                                 alt="{{ results[0].creation.original_name }}"
+                                 onclick="viewImage('{{ url_for('uploaded_file', filename=results[0].creation.preview_filename) }}')">
+                            <h4>{{ results[0].creation.original_name }}</h4>
+                            <p class="score">{{ results[0].avg_total }} bodů</p>
+                        </div>
+                        {% endif %}
+                        
+                        {% if results|length >= 3 %}
+                        <div class="podium-place third">
+                            <div class="podium-rank">🥉</div>
+                            <img src="{{ url_for('uploaded_file', filename=results[2].creation.preview_filename) }}" 
+                                 alt="{{ results[2].creation.original_name }}"
+                                 onclick="viewImage('{{ url_for('uploaded_file', filename=results[2].creation.preview_filename) }}')">
+                            <h4>{{ results[2].creation.original_name }}</h4>
+                            <p class="score">{{ results[2].avg_total }} bodů</p>
+                        </div>
+                        {% endif %}
+                    </div>
+                    
+                    <!-- Detailed results table -->
+                    <div class="table-container">
+                        <table class="results-table">
+                            <thead>
+                                <tr>
+                                    <th>Pořadí</th>
+                                    <th>Náhled</th>
+                                    <th>Název práce</th>
+                                    <th>Detailní hodnocení</th>
+                                    <th>Celkem</th>
+                                    <th>Počet hodnocení</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for result in results %}
+                                <tr class="{% if loop.index <= 3 %}medal-row{% endif %}">
+                                    <td class="rank">
+                                        {% if loop.index == 1 %}
+                                            🥇
+                                        {% elif loop.index == 2 %}
+                                            🥈
+                                        {% elif loop.index == 3 %}
+                                            🥉
+                                        {% else %}
+                                            {{ loop.index }}.
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        <img src="{{ url_for('uploaded_file', filename=result.creation.preview_filename) }}" 
+                                             alt="{{ result.creation.original_name }}" 
+                                             class="thumbnail"
+                                             onclick="viewImage('{{ url_for('uploaded_file', filename=result.creation.preview_filename) }}')">
+                                    </td>
+                                    <td><strong>{{ result.creation.original_name }}</strong></td>
+                                    <td class="scores-detail">
+                                        {% for criterion_name, score in result.avg_scores.items() %}
+                                        <div class="score-item">
+                                            <span class="score-label">{{ criterion_name }}:</span>
+                                            <span class="score-value">{{ score }}</span>
+                                        </div>
+                                        {% endfor %}
+                                    </td>
+                                    <td><strong class="total-score">{{ result.avg_total }}</strong></td>
+                                    <td>{{ result.eval_count }}</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                {% else %}
+                    <div class="info-box">
+                        <p>V této kategorii zatím nebyly ohodnoceny žádné práce.</p>
+                    </div>
+                {% endif %}
+            </div>
+            {% endfor %}
+        {% else %}
+            <div class="section">
+                <div class="info-box">
+                    <p>Zatím nebyly ohodnoceny žádné práce.</p>
+                </div>
+            </div>
+        {% endif %}
+    </div>
+    
+    <!-- Modal pro zobrazení obrázku -->
+    <div id="imageModal" class="modal">
+        <span class="close" onclick="closeImageModal()">&times;</span>
+        <img class="modal-image" id="modalImage">
+    </div>
+    
+    <script src="{{ url_for('static', filename='script.js') }}"></script>
+</body>
+</html>

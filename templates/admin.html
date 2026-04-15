@@ -1,0 +1,428 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin - Hodnocení grafických prací</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <div class="navbar">
+        <h1>Admin rozhraní</h1>
+        <div class="nav-links">
+            <span>Přihlášen: {{ session.user_name }}</span>
+            <a href="{{ url_for('admin_evaluations') }}" class="btn btn-secondary">Všechna hodnocení</a>
+            <a href="{{ url_for('results') }}" class="btn btn-secondary">Výsledky</a>
+            <a href="{{ url_for('admin_database') }}" class="btn btn-warning">Raw DB</a>
+            <a href="{{ url_for('logout') }}" class="btn btn-danger">Odhlásit</a>
+        </div>
+    </div>
+    
+    <div class="container">
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                    <div class="alert alert-{{ category }}">{{ message }}</div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+
+        <div class="section">
+            <h2>Živé informace</h2>
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <div class="stat-label">Nahlášené nepřesnosti (čekající)</div>
+                    <div class="stat-number" id="pendingReportsCount">{{ pending_reports|length }}</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="section">
+            <h2>Upozornění na nepřesnost hodnocení</h2>
+            <div id="pendingReportsList" class="reports-list">
+                {% if pending_reports %}
+                    {% for report in pending_reports %}
+                    <div class="report-item">
+                        <div>
+                            <strong>{{ report.evaluator_name }}</strong> nahlásil(a) nepřesnost u práce <strong>{{ report.creation_name }}</strong>.
+                            {% if report.note %}
+                                <div class="report-note">Poznámka: {{ report.note }}</div>
+                            {% endif %}
+                        </div>
+                        <form method="POST" action="{{ url_for('resolve_report', report_id=report.id) }}">
+                            <button type="submit" class="btn btn-success btn-sm">Označit jako vyřešené</button>
+                        </form>
+                    </div>
+                    {% endfor %}
+                {% else %}
+                    <p class="refresh-info" id="noPendingReports">Žádná čekající hlášení.</p>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Nebezpečná akce: smazání všech hodnocení -->
+        <div class="section">
+            <h2>⚠️ Nebezpečná akce</h2>
+            <div class="danger-zone">
+                <p><strong>Smazat všechna hodnocení</strong> - Tato akce je nevratná a odstraní všechna hodnocení včetně logů.</p>
+                <button type="button" onclick="openDeleteEvaluationsModal()" class="btn btn-danger">Smazat všechna hodnocení</button>
+            </div>
+        </div>
+        
+        <!-- Stav soutěže -->
+        <div class="section">
+            <h2>Stav soutěže</h2>
+            <form method="POST" action="{{ url_for('set_contest_state') }}" class="inline-form">
+                <div class="form-group">
+                    <label>Aktuální stav: <strong>{{ contest_state }}</strong></label>
+                    <select name="state" required>
+                        <option value="čekání" {% if contest_state == 'čekání' %}selected{% endif %}>Čekání</option>
+                        <option value="spuštěno" {% if contest_state == 'spuštěno' %}selected{% endif %}>Spuštěno</option>
+                        <option value="pozastaveno" {% if contest_state == 'pozastaveno' %}selected{% endif %}>Pozastaveno</option>
+                        <option value="ukončeno" {% if contest_state == 'ukončeno' %}selected{% endif %}>Ukončeno</option>
+                    </select>
+                    <button type="submit" class="btn btn-primary">Změnit stav</button>
+                </div>
+            </form>
+        </div>
+        
+        <!-- Správa kritérií hodnocení -->
+        <div class="section">
+            <h2>Kritéria hodnocení</h2>
+            
+            {% for category, category_criteria in criteria.items() %}
+            <div class="criteria-category">
+                <h3>{{ category }}</h3>
+                <div class="criteria-list">
+                    {% for criterion in category_criteria %}
+                    <div class="criterion-item">
+                        <span class="criterion-name">{{ criterion.name }}</span>
+                        {% if criterion.type == 'slider' %}
+                        <span class="badge badge-blue">Posuvník {{ criterion.min }}-{{ criterion.max }}</span>
+                        {% else %}
+                        <span class="badge badge-green">Ano/Ne</span>
+                        {% endif %}
+                        <form method="POST" action="{{ url_for('delete_criterion') }}" style="display: inline;">
+                            <input type="hidden" name="category" value="{{ category }}">
+                            <input type="hidden" name="criterion_id" value="{{ criterion.id }}">
+                            <button type="submit" class="btn btn-danger btn-sm" onclick="return confirm('Opravdu smazat toto kritérium?');">×</button>
+                        </form>
+                    </div>
+                    {% endfor %}
+                </div>
+                
+                <button class="btn btn-success btn-sm" onclick="openAddCriterionModal('{{ category }}')">+ Přidat kritérium</button>
+            </div>
+            {% endfor %}
+        </div>
+        
+        <!-- Nahrání práce -->
+        <div class="section">
+            <h2>Nahrát novou práci</h2>
+            <form method="POST" action="{{ url_for('upload_creation') }}" enctype="multipart/form-data">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="name">Název práce:</label>
+                        <input type="text" id="name" name="name" required>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="category">Kategorie:</label>
+                        <select id="category" name="category" required>
+                            <option value="Photoshop">Photoshop</option>
+                            <option value="Illustrator">Illustrator</option>
+                            <option value="Blender">Blender</option>
+                        </select>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="preview_file">Náhledový obrázek (.png, .jpg):</label>
+                        <input type="file" id="preview_file" name="preview_file" accept=".png,.jpg,.jpeg,.gif,.bmp" required>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="source_file">Druhý obrázek (.png, .jpg):</label>
+                        <input type="file" id="source_file" name="source_file" accept=".png,.jpg,.jpeg,.gif,.bmp" required>
+                    </div>
+                    
+                    <button type="submit" class="btn btn-success">Nahrát práci</button>
+                </div>
+            </form>
+        </div>
+        
+        <!-- Seznam prací -->
+        <div class="section">
+            <h2>Nahrané práce ({{ creations|length }})</h2>
+            <div class="table-container">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Náhled</th>
+                            <th>Název</th>
+                            <th>Kategorie</th>
+                            <th>Druhý obrázek</th>
+                            <th>Nahráno</th>
+                            <th>Akce</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for creation in creations %}
+                        <tr>
+                            <td>{{ creation.id }}</td>
+                            <td>
+                                <img src="{{ url_for('uploaded_file', filename=creation.preview_filename) }}" 
+                                     alt="{{ creation.original_name }}" 
+                                     class="thumbnail">
+                            </td>
+                            <td>{{ creation.original_name }}</td>
+                            <td><span class="badge badge-{{ 'blue' if creation.category == 'Photoshop' else ('orange' if creation.category == 'Illustrator' else 'purple') }}">{{ creation.category }}</span></td>
+                            <td>
+                                <img src="{{ url_for('uploaded_file', filename=creation.source_filename) }}" 
+                                     alt="Druhý obrázek - {{ creation.original_name }}" 
+                                     class="thumbnail">
+                            </td>
+                            <td>{{ creation.uploaded_at[:10] }}</td>
+                            <td>
+                                <form method="POST" action="{{ url_for('delete_creation', creation_id=creation.id) }}" 
+                                      onsubmit="return confirm('Opravdu smazat tuto práci?');" style="display: inline;">
+                                    <button type="submit" class="btn btn-danger btn-sm">Smazat</button>
+                                </form>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        
+        <!-- Přidání uživatele -->
+        <div class="section">
+            <h2>Přidat nového uživatele</h2>
+            <form method="POST" action="{{ url_for('add_user') }}">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="name">Celé jméno:</label>
+                        <input type="text" id="name" name="name" required placeholder="Jan Novák">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="login">Login (jmeno.prijmeni):</label>
+                        <input type="text" id="login" name="login" required placeholder="jan.novak">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="password">Heslo:</label>
+                        <input type="password" id="password" name="password" required>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="key">Identifikační klíč (5 znaků):</label>
+                        <input type="text" id="key" name="key" required maxlength="5" placeholder="ABC12" style="text-transform: uppercase;">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="school">Škola:</label>
+                        <input type="text" id="school" name="school" required>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="role">Role:</label>
+                        <select id="role" name="role" required>
+                            <option value="hodnotitel">Hodnotitel</option>
+                            <option value="admin">Admin</option>
+                        </select>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label>Oprávnění hodnotit:</label>
+                        <div class="checkbox-group">
+                            <label><input type="checkbox" name="permissions" value="Photoshop"> Photoshop</label>
+                            <label><input type="checkbox" name="permissions" value="Illustrator"> Illustrator</label>
+                            <label><input type="checkbox" name="permissions" value="Blender"> Blender</label>
+                        </div>
+                    </div>
+                    
+                    <button type="submit" class="btn btn-success">Přidat uživatele</button>
+                </div>
+            </form>
+        </div>
+        
+        <!-- Seznam uživatelů -->
+        <div class="section">
+            <h2>Uživatelé ({{ users|length }})</h2>
+            <div class="table-container">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Jméno</th>
+                            <th>Login</th>
+                            <th>Klíč</th>
+                            <th>Škola</th>
+                            <th>Role</th>
+                            <th>Oprávnění</th>
+                            <th>Akce</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for user in users %}
+                        <tr>
+                            <td>{{ user.id }}</td>
+                            <td>{{ user.name }}</td>
+                            <td>{{ user.login }}</td>
+                            <td><code>{{ user.key }}</code></td>
+                            <td>{{ user.school }}</td>
+                            <td><span class="badge badge-{{ 'green' if user.role == 'admin' else 'blue' }}">{{ user.role }}</span></td>
+                            <td>{{ user.permissions|join(', ') }}</td>
+                            <td>
+                                <button
+                                    class="btn btn-warning btn-sm"
+                                    onclick="editUserFromDataset(this)"
+                                    data-id="{{ user.id }}"
+                                    data-name="{{ user.name }}"
+                                    data-login="{{ user.login }}"
+                                    data-key="{{ user.key }}"
+                                    data-school="{{ user.school }}"
+                                    data-role="{{ user.role }}"
+                                    data-permissions="{{ user.permissions|join('|') }}"
+                                >Upravit</button>
+                                <form method="POST" action="{{ url_for('delete_user', user_id=user.id) }}" 
+                                      onsubmit="return confirm('Opravdu smazat tohoto uživatele?');" style="display: inline;">
+                                    <button type="submit" class="btn btn-danger btn-sm">Smazat</button>
+                                </form>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Modal pro editaci uživatele -->
+    <div id="editModal" class="modal">
+        <div class="modal-content">
+            <span class="close" onclick="closeEditModal()">&times;</span>
+            <h2>Upravit uživatele</h2>
+            <form id="editForm" method="POST" action="">
+                <div class="form-group">
+                    <label for="edit_name">Celé jméno:</label>
+                    <input type="text" id="edit_name" name="name" required>
+                </div>
+                
+                <div class="form-group">
+                    <label for="edit_login">Login:</label>
+                    <input type="text" id="edit_login" name="login" required>
+                </div>
+                
+                <div class="form-group">
+                    <label for="edit_password">Nové heslo (nevyplňovat pokud nechcete měnit):</label>
+                    <input type="password" id="edit_password" name="password">
+                </div>
+                
+                <div class="form-group">
+                    <label for="edit_key">Identifikační klíč:</label>
+                    <input type="text" id="edit_key" name="key" required maxlength="5" style="text-transform: uppercase;">
+                </div>
+                
+                <div class="form-group">
+                    <label for="edit_school">Škola:</label>
+                    <input type="text" id="edit_school" name="school" required>
+                </div>
+                
+                <div class="form-group">
+                    <label for="edit_role">Role:</label>
+                    <select id="edit_role" name="role" required>
+                        <option value="hodnotitel">Hodnotitel</option>
+                        <option value="admin">Admin</option>
+                    </select>
+                </div>
+                
+                <div class="form-group">
+                    <label>Oprávnění hodnotit:</label>
+                    <div class="checkbox-group">
+                        <label><input type="checkbox" id="edit_perm_ps" name="permissions" value="Photoshop"> Photoshop</label>
+                        <label><input type="checkbox" id="edit_perm_ai" name="permissions" value="Illustrator"> Illustrator</label>
+                        <label><input type="checkbox" id="edit_perm_bl" name="permissions" value="Blender"> Blender</label>
+                    </div>
+                </div>
+                
+                <button type="submit" class="btn btn-primary">Uložit změny</button>
+                <button type="button" onclick="closeEditModal()" class="btn btn-secondary">Zrušit</button>
+            </form>
+        </div>
+    </div>
+    
+    <!-- Modal pro přidání kritéria -->
+    <div id="criterionModal" class="modal">
+        <div class="modal-content">
+            <span class="close" onclick="closeCriterionModal()">&times;</span>
+            <h2>Přidat kritérium hodnocení</h2>
+            <form method="POST" action="{{ url_for('add_criterion') }}">
+                <input type="hidden" id="criterion_category" name="category">
+                
+                <div class="form-group">
+                    <label for="criterion_name">Název kritéria:</label>
+                    <input type="text" id="criterion_name" name="name" required placeholder="např. Kontrast, Osvětlení">
+                </div>
+                
+                <div class="form-group">
+                    <label for="criterion_type">Typ hodnocení:</label>
+                    <select id="criterion_type" name="type" required onchange="toggleSliderOptions()">
+                        <option value="slider">Posuvník (0-X bodů)</option>
+                        <option value="checkbox">Ano/Ne (splněno/nesplněno)</option>
+                    </select>
+                </div>
+                
+                <div id="slider_options">
+                    <div class="form-group">
+                        <label for="criterion_min">Minimální hodnota:</label>
+                        <input type="number" id="criterion_min" name="min" value="0" min="0">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="criterion_max">Maximální hodnota:</label>
+                        <input type="number" id="criterion_max" name="max" value="10" min="1">
+                    </div>
+                </div>
+                
+                <button type="submit" class="btn btn-success">Přidat kritérium</button>
+                <button type="button" onclick="closeCriterionModal()" class="btn btn-secondary">Zrušit</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modal pro smazání všech hodnocení -->
+    <div id="deleteEvaluationsModal" class="modal">
+        <div class="modal-content">
+            <span class="close" onclick="closeDeleteEvaluationsModal()">&times;</span>
+            <h2>⚠️ Smazat všechna hodnocení</h2>
+            <div class="alert alert-error" style="margin-bottom: 20px;">
+                <strong>VAROVÁNÍ:</strong> Tato akce je nevratná! Smažete všechna hodnocení a evaluační logy. Práce zůstanou zachovány.
+            </div>
+            <form method="POST" action="{{ url_for('delete_all_evaluations') }}" onsubmit="return validateDeleteEvaluations()">
+                <div class="form-group">
+                    <label>
+                        <input type="checkbox" id="confirmDeleteCheckbox" required>
+                        Rozumím, že tato akce je nevratná
+                    </label>
+                </div>
+                
+                <div class="form-group">
+                    <label for="admin_password_confirm">Zadejte své administrátorské heslo pro potvrzení:</label>
+                    <input type="password" id="admin_password_confirm" name="password" required placeholder="Vaše heslo">
+                </div>
+                
+                <button type="submit" class="btn btn-danger">Ano, smazat všechna hodnocení</button>
+                <button type="button" onclick="closeDeleteEvaluationsModal()" class="btn btn-secondary">Zrušit</button>
+            </form>
+        </div>
+    </div>
+    
+    <script>
+        window.liveStatsUrl = "{{ url_for('admin_live_stats') }}";
+    </script>
+    <script src="{{ url_for('static', filename='script.js') }}"></script>
+</body>
+</html>
